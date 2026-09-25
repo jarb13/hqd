@@ -23,7 +23,7 @@
   <div id="modal-container"></div>
 
   <!-- ========================================== -->
-  <!-- 2. ส่วน CSS ตกแต่ง (แยกส่วนท้าย HTML) -->
+  <!-- 2. ส่วน CSS ตกแต่ง (จัดวางส่วนท้ายของโครงสร้าง UI) -->
   <!-- ========================================== -->
   <style>
     @import url('https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700;800&display=swap');
@@ -32,16 +32,18 @@
       font-family: 'Sarabun', sans-serif;
     }
     
+    /* Semantic Class Naming สำหรับการแสดงผลป้ายสถานะ */
     .rama-badge-very-urgent { background-color: #fff1f2; color: #be123c; border: 1px solid #fecdd3; }
     .rama-badge-urgent { background-color: #fffbeb; color: #b45309; border: 1px solid #fde68a; }
     .rama-badge-normal { background-color: #eff6ff; color: #1d4ed8; border: 1px solid #bfdbfe; }
   </style>
 
   <!-- ========================================== -->
-  <!-- 3. ส่วน JavaScript (สมองกลระบบ SPA) -->
+  <!-- 3. ส่วน JavaScript (สมองกลระบบทำงานหลังโหลด UI เสร็จ) -->
   <!-- ========================================== -->
   <script>
-    const API_URL = "https://script.google.com/macros/s/AKfycbyXrAgyxTYu6GPx716-6dKrFuHtbEDvT2zEeGyZx5XmJXimYg2clQIsjcfQ-IqMLJjN/exec";
+    // อัปเดตลิงก์ API ใหม่จาก Google Apps Script
+    const API_URL = "https://script.google.com/macros/s/AKfycbwh-PvW0UNXCz99CbzZJx9QJxhwL-M13P0fDn_55NTT_r942YryR6OuGhdmZiKlcVW_/exec";
 
     let state = {
       user: JSON.parse(localStorage.getItem('docuack_session')) || null,
