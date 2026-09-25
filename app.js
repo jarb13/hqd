@@ -1,11 +1,8 @@
 /**
- * DocuAck Application Logic
- * ใช้ IIFE (Immediately Invoked Function Expression) 
- * เพื่อป้องกันไม่ให้ตัวแปรภายในไปกวน Global Scope
+ * DocuAck Application Logic (Full Version)
  */
 (function() {
   // --- 1. Utility & Security Functions ---
-  // ฟังก์ชันป้องกัน XSS (แปลงอักขระพิเศษเป็น HTML Entities ก่อนแสดงผล)
   const escapeHTML = (str) => {
     if (str === null || str === undefined) return '';
     return String(str).replace(/[&<>'"]/g, 
@@ -15,277 +12,120 @@
     );
   };
 
+  // เปลี่ยนเป็น URL ของ GAS คุณ
   const API_URL = "https://script.google.com/macros/s/AKfycbwh-PvW0UNXCz99CbzZJx9QJxhwL-M13P0fDn_55NTT_r942YryR6OuGhdmZiKlcVW_/exec";
 
-  // --- 2. Fallback Data (Cleaned Security) ---
-  // เอารหัส PIN ออกจากหน้าบ้าน (Frontend) เพื่อความปลอดภัย 
-  const FALLBACK_USERS = [
-    { id: '020482', name: 'นาย ธนพล จันทรพร', department: 'เจ้าหน้าที่บริหารงานทั่วไป', role: 'admin' },
-    { id: '010363', name: 'น.ส. นิภาพร จีนไม้', department: 'นักวิชาการพัฒนาคุณภาพ', role: 'user' },
-    { id: '000826', name: 'นาง วันทนา วีระถาวร', department: 'พยาบาล', role: 'user' },
-    { id: '001668', name: 'น.ส. ณัฏฐ์พิชญา ศรีตพงษ์', department: 'เจ้าหน้าที่บริหารงานทั่วไป', role: 'user' },
-    { id: '002610', name: 'น.ส. เสาวลักษณ์ เจริญสวัสดิ์', department: 'ฝ่ายการเงิน', role: 'user' }
-  ];
-
-  const FALLBACK_DOCS = [
-    {
-      id: 'DOC-2026-001',
-      title: 'นโยบายความมั่นคงปลอดภัยไซเบอร์และมาตรการป้องกัน Phishing ประจำปี 2026',
-      fileUrl: 'https://drive.google.com/file/d/1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms/preview',
-      urgencyLevel: 'Very Urgent',
-      startDate: '2026-09-01',
-      endDate: '2026-09-20',
-      targetAudience: 'All',
-      readStatus: ['020482'],
-      category: 'นโยบายไอทีและความปลอดภัย',
-      description: 'แนวปฏิบัติการยืนยันตัวตน 2 ขั้นตอน (2FA) และการรักษาความปลอดภัยข้อมูลลูกค้า'
-    },
-    {
-      id: 'DOC-2026-002',
-      title: 'แนวปฏิบัติการตรวจประเมินคุณภาพงานและการควบคุมความเสี่ยงเฉพาะรายบุคคล',
-      fileUrl: 'https://drive.google.com/file/d/1w8E7Xl0_zD3qN4v_sampleFireDrill/preview',
-      urgencyLevel: 'Urgent',
-      startDate: '2026-09-18',
-      endDate: '2026-10-10',
-      targetAudience: '020482,010363',
-      readStatus: ['020482'],
-      category: 'พัฒนาคุณภาพองค์กร',
-      description: 'เอกสารระเบียบปฏิบัติเฉพาะเจ้าหน้าที่บริหารงานทั่วไป'
-    }
-  ];
-
-  // --- 3. App State ---
+  // --- 2. State Management ---
   let state = {
     user: JSON.parse(localStorage.getItem('docuack_session')) || null,
-    users: JSON.parse(localStorage.getItem('docuack_cached_users')) || FALLBACK_USERS, 
-    docs: JSON.parse(localStorage.getItem('docuack_cached_docs')) || FALLBACK_DOCS,  
+    users: [], 
+    docs: [],  
     tab: 'documents',
     search: '',
     filterUrgency: 'all',
     filterStatus: 'all',
-    filterAudience: 'all',
     viewDoc: null,
     trackingDoc: null,
     showCreateModal: false,
-    createDocForm: { audienceType: 'All', selectedUserIds: [], searchKeyword: '', filterDept: 'all' },
     userSearch: '',
-    userFilterRole: 'all',
-    editUserModal: null,
-    showAddUserModal: false
+    createDocForm: { audienceType: 'All', selectedUserIds: [], filterDept: 'all', searchKeyword: '' }
   };
 
-  // --- 4. Initialization & Data Fetching ---
+  // --- 3. API Initialization ---
   async function initApp() {
     const loader = document.getElementById('global-loader');
-    const loaderTitle = document.getElementById('loader-title');
-    const loaderDesc = document.getElementById('loader-desc');
-    const loaderActions = document.getElementById('loader-actions');
-    const loaderSpinner = document.getElementById('loader-spinner');
-
-    const timeoutId = setTimeout(() => {
-      if (loader && loader.style.display !== 'none') {
-        loaderSpinner.classList.add('hidden');
-        loaderTitle.innerText = "เชื่อมต่อฐานข้อมูลล่าช้า";
-        loaderTitle.classList.add('text-amber-400');
-        loaderDesc.innerText = "Google Apps Script ใช้เวลาตอบสนองนานกว่าปกติ";
-        loaderActions.classList.remove('hidden');
-      }
-    }, 7000);
-
+    
     try {
       const response = await fetch(API_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'text/plain;charset=utf-8' },
         body: JSON.stringify({ action: 'getAppData' })
       });
-      clearTimeout(timeoutId);
       if (!response.ok) throw new Error("HTTP Status: " + response.status);
+      
       const result = await response.json();
-      if (result.status === 'success' && result.data) {
-        if (Array.isArray(result.data.users) && result.data.users.length > 0) {
-          state.users = result.data.users;
-          localStorage.setItem('docuack_cached_users', JSON.stringify(state.users));
-        }
-        if (Array.isArray(result.data.docs) && result.data.docs.length > 0) {
-          state.docs = result.data.docs;
-          localStorage.setItem('docuack_cached_docs', JSON.stringify(state.docs));
-        }
+      if (result.status === 'success') {
+        state.users = result.data.users || [];
+        state.docs = result.data.docs || [];
       }
     } catch (error) {
-      console.warn("API Connection Error, using cached/fallback data:", error);
-      clearTimeout(timeoutId);
-      if (!state.users || state.users.length === 0) state.users = FALLBACK_USERS;
-      if (!state.docs || state.docs.length === 0) state.docs = FALLBACK_DOCS;
+      console.warn("API Error:", error);
+      alert("ไม่สามารถเชื่อมต่อฐานข้อมูลได้ โปรดตรวจสอบ Vercel หรือ GAS URL");
     } 
+    
     loader.style.display = 'none';
     render();
   }
 
-  // --- 5. Helper Functions ---
-  function setSession(u) {
-    if (u) localStorage.setItem('docuack_session', JSON.stringify(u));
-    else localStorage.removeItem('docuack_session');
-  }
-
-  function isDocAssignedToUser(doc, userId) {
-    if (!doc) return false;
-    const audience = String(doc.targetAudience || 'All').trim();
-    if (audience.toLowerCase() === 'all' || audience === 'ทุกคน') return true;
-    const ids = audience.split(',').map(s => s.trim().toUpperCase());
-    return ids.includes(String(userId).trim().toUpperCase());
-  }
-
-  function getDocTargetList(doc) {
-    if (!doc) return [];
-    const audience = String(doc.targetAudience || 'All').trim();
-    if (audience.toLowerCase() === 'all' || audience === 'ทุกคน') return state.users;
-    const ids = audience.split(',').map(s => s.trim().toUpperCase());
-    return state.users.filter(u => ids.includes(String(u.id).trim().toUpperCase()));
-  }
-
-  function isDocOverdue(doc) {
-    if (!doc.endDate) return false;
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const end = new Date(doc.endDate);
-    end.setHours(23, 59, 59, 999);
-    const targetUsers = getDocTargetList(doc);
-    const readCount = Array.isArray(doc.readStatus) ? doc.readStatus.length : 0;
-    return today.getTime() > end.getTime() && readCount < targetUsers.length;
-  }
-
-  // --- 6. Rendering Logic ---
+  // --- 4. Render Layouts ---
   function render() {
     const app = document.getElementById('app');
     if (!state.user) renderLogin(app);
     else renderDashboard(app);
   }
 
+  // 4.1 Login Screen
   function renderLogin(app) {
     app.innerHTML = `
-      <div class="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-indigo-950 flex flex-col justify-center py-12 px-4 sm:px-6 lg:px-8">
-        <div class="sm:mx-auto sm:w-full sm:max-w-md">
+      <div class="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-indigo-950 flex flex-col justify-center py-12 px-4">
+        <div class="sm:mx-auto sm:w-full sm:max-w-md bg-white rounded-2xl shadow-2xl p-8">
           <div class="text-center mb-6">
-            <div class="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-gradient-to-tr from-blue-600 to-indigo-500 text-white shadow-xl shadow-blue-500/20 mb-4 ring-4 ring-white/10">
-              <i class="fa-solid fa-file-circle-check text-3xl"></i>
-            </div>
-            <h1 class="text-3xl font-extrabold text-white tracking-tight">DocuAck Portal</h1>
-            <p class="text-sm text-slate-300 mt-1">ระบบรับทราบเอกสารองค์กร</p>
+            <div class="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-blue-600 text-white mb-2"><i class="fa-solid fa-file-circle-check text-3xl"></i></div>
+            <h1 class="text-2xl font-extrabold text-slate-800">DocuAck Portal</h1>
           </div>
-          
-          <div class="bg-white rounded-2xl shadow-2xl p-8 border border-slate-200">
-            <h2 class="text-base font-bold text-slate-800 mb-1 text-center">เข้าสู่ระบบด้วยรหัสพนักงาน</h2>
-            <form id="loginForm" class="space-y-4 mt-5">
-              <div>
-                <label class="block text-xs font-bold text-slate-600 uppercase mb-1">รหัสพนักงาน (Employee ID)</label>
-                <div class="relative">
-                  <input type="text" id="loginId" required placeholder="เช่น 020482" class="w-full pl-9 pr-3 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm font-semibold uppercase focus:outline-none focus:ring-2 focus:ring-blue-600 transition" />
-                  <i class="fa-regular fa-id-badge absolute left-3 top-3.5 text-slate-400 text-sm"></i>
-                </div>
-              </div>
-              <div>
-                <label class="block text-xs font-bold text-slate-600 uppercase mb-1">รหัสผ่าน (PIN)</label>
-                <div class="relative">
-                  <input type="password" id="loginPin" required placeholder="กรอกรหัสผ่าน" class="w-full pl-9 pr-3 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-blue-600 transition" />
-                  <i class="fa-solid fa-lock absolute left-3 top-3.5 text-slate-400 text-sm"></i>
-                </div>
-              </div>
-              <div id="loginError" class="text-xs text-red-600 hidden font-medium text-center bg-red-50 p-2.5 rounded-xl border border-red-200"></div>
-              
-              <button type="submit" class="w-full py-3 px-4 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-sm font-bold shadow-md shadow-blue-500/20 transition-all flex items-center justify-center gap-2 cursor-pointer">
-                <span>เข้าสู่ระบบ</span><i class="fa-solid fa-arrow-right text-xs"></i>
-              </button>
-            </form>
-
-            <div class="mt-6 pt-5 border-t border-slate-100">
-              <p class="text-xs font-bold text-slate-700 mb-2 flex items-center gap-1.5">
-                <i class="fa-solid fa-wand-magic-sparkles text-amber-500"></i> บัญชีหลักทดสอบระบบ:
-              </p>
-              <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                <button type="button" onclick="DocuAckApp.quickLogin('020482')" class="p-2.5 text-left rounded-xl border border-indigo-200 bg-indigo-50/70 hover:bg-indigo-100 transition-all text-xs cursor-pointer">
-                  <div class="flex items-center justify-between mb-0.5"><span class="font-bold text-indigo-900">020482</span><span class="text-[10px] bg-indigo-600 text-white px-1.5 rounded-full font-bold">Admin</span></div>
-                  <div class="font-bold text-slate-800 truncate">นาย ธนพล จันทรพร</div>
-                </button>
-                <button type="button" onclick="DocuAckApp.quickLogin('010363')" class="p-2.5 text-left rounded-xl border border-emerald-200 bg-emerald-50/70 hover:bg-emerald-100 transition-all text-xs cursor-pointer">
-                  <div class="flex items-center justify-between mb-0.5"><span class="font-bold text-emerald-900">010363</span><span class="text-[10px] bg-emerald-600 text-white px-1.5 rounded-full font-bold">User</span></div>
-                  <div class="font-bold text-slate-800 truncate">น.ส. นิภาพร จีนไม้</div>
-                </button>
-              </div>
+          <form id="loginForm" class="space-y-4">
+            <div>
+              <label class="block text-xs font-bold text-slate-600 mb-1">รหัสพนักงาน (Employee ID)</label>
+              <input type="text" id="loginId" required class="w-full px-3 py-2.5 bg-slate-50 border border-slate-300 rounded-xl" />
             </div>
-          </div>
+            <div>
+              <label class="block text-xs font-bold text-slate-600 mb-1">รหัสผ่าน (PIN)</label>
+              <input type="password" id="loginPin" required class="w-full px-3 py-2.5 bg-slate-50 border border-slate-300 rounded-xl" />
+            </div>
+            <div id="loginError" class="text-xs text-red-600 hidden text-center bg-red-50 p-2 rounded-xl"></div>
+            <button type="submit" class="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold">เข้าสู่ระบบ</button>
+          </form>
         </div>
       </div>
     `;
 
-    document.getElementById('loginForm').onsubmit = function(e) {
+    document.getElementById('loginForm').onsubmit = (e) => {
       e.preventDefault();
       const id = document.getElementById('loginId').value.trim().toUpperCase();
       const pin = document.getElementById('loginPin').value.trim();
       const err = document.getElementById('loginError');
       
       const u = state.users.find(x => String(x.id).toUpperCase() === id);
-      
-      if (!u) {
-        err.innerText = `ไม่พบรหัสผู้ใช้ '${escapeHTML(id)}' ในระบบ`;
-        err.classList.remove('hidden');
-        return;
-      }
-      
-      // การประเมินรหัสผ่านเบื้องต้นสำหรับ Frontend Demo (ควรย้ายไป API ในอนาคต)
-      if (pin !== String(u.id) && pin !== '1234' && pin !== u.pin) {
-        err.innerText = 'รหัสผ่าน PIN ไม่ถูกต้อง';
+      if (!u || pin !== u.pin) {
+        err.innerText = 'รหัสพนักงาน หรือ PIN ไม่ถูกต้อง';
         err.classList.remove('hidden');
         return;
       }
       
       state.user = u;
-      setSession(u);
+      localStorage.setItem('docuack_session', JSON.stringify(u));
       render();
     };
   }
 
+  // 4.2 Dashboard Container
   function renderDashboard(app) {
     const isAdmin = (String(state.user.role).trim().toLowerCase() === 'admin');
-    const roleText = isAdmin ? 'Admin (ผู้ดูแลระบบ)' : 'บุคลากรทั่วไป';
-    const badgeClass = isAdmin ? 'bg-indigo-100 text-indigo-800 border-indigo-200' : 'bg-emerald-100 text-emerald-800 border-emerald-200';
     
-    // Header & Navbar
     app.innerHTML = `
-      <header class="bg-white/95 backdrop-blur-md border-b border-slate-200 sticky top-0 z-40 shadow-xs">
-        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex items-center justify-between h-16">
-          <div class="flex items-center gap-3">
-            <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-blue-700 to-indigo-600 flex items-center justify-center text-white shadow-md shadow-blue-500/20">
-              <i class="fa-solid fa-file-circle-check text-xl"></i>
-            </div>
-            <div>
-              <div class="font-bold text-lg text-slate-900">DocuAck</div>
-              <div class="text-2xs text-slate-500">ระบบรับทราบเอกสารองค์กร</div>
-            </div>
-          </div>
-          <div class="flex items-center gap-2.5">
-            <div class="text-right hidden md:block pl-2 border-l border-slate-200">
-              <div class="text-xs font-bold text-slate-900">${escapeHTML(state.user.name)}</div>
-              <div class="text-2xs text-slate-500">${escapeHTML(state.user.id)} • ${escapeHTML(state.user.department)}</div>
-            </div>
-            <span class="text-xs font-bold px-2.5 py-1 rounded-xl border ${badgeClass}">${roleText}</span>
-            <button onclick="DocuAckApp.logout()" class="px-3 py-1.5 text-xs text-red-600 hover:bg-red-50 rounded-xl font-bold transition-colors flex items-center gap-1.5">
-              <i class="fa-solid fa-arrow-right-from-bracket"></i> <span class="hidden sm:inline">ออก</span>
-            </button>
+      <header class="bg-white border-b border-slate-200 sticky top-0 z-40">
+        <div class="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between">
+          <div class="font-bold text-lg"><i class="fa-solid fa-file-circle-check text-blue-600 mr-2"></i>DocuAck</div>
+          <div class="flex items-center gap-4 text-sm font-bold">
+            <span>${escapeHTML(state.user.name)} (${isAdmin ? 'Admin' : 'User'})</span>
+            <button onclick="DocuAckApp.logout()" class="text-red-600 hover:underline">ออกจากระบบ</button>
           </div>
         </div>
       </header>
-      <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-        <div class="flex items-center justify-between border-b border-slate-200 mb-6">
-          <div class="flex items-center gap-2">
-            <button onclick="DocuAckApp.setTab('documents')" class="py-3 px-4 text-sm font-bold border-b-2 transition-colors flex items-center gap-2 ${state.tab === 'documents' ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-500'}">
-              <i class="fa-regular fa-folder-open"></i> เอกสารเวียน
-            </button>
-            ${isAdmin ? `
-              <button onclick="DocuAckApp.setTab('users')" class="py-3 px-4 text-sm font-bold border-b-2 transition-colors flex items-center gap-2 ${state.tab === 'users' ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-500'}">
-                <i class="fa-solid fa-users-gear"></i> จัดการบุคลากร
-              </button>
-            ` : ''}
-          </div>
+      <main class="max-w-7xl mx-auto px-4 py-6">
+        <div class="flex gap-4 border-b border-slate-200 mb-6">
+          <button onclick="DocuAckApp.setTab('documents')" class="py-2 px-4 font-bold ${state.tab === 'documents' ? 'border-b-2 border-blue-600 text-blue-600' : 'text-slate-500'}">หน้าเอกสาร</button>
+          ${isAdmin ? `<button onclick="DocuAckApp.setTab('users')" class="py-2 px-4 font-bold ${state.tab === 'users' ? 'border-b-2 border-blue-600 text-blue-600' : 'text-slate-500'}">จัดการบุคลากร</button>` : ''}
         </div>
         <div id="content-container"></div>
       </main>
@@ -295,47 +135,42 @@
     else document.getElementById('content-container').innerHTML = renderUsersTab();
 
     if (state.viewDoc) renderViewerModal();
+    if (state.showCreateModal) renderCreateDocModal();
+    if (state.trackingDoc) renderTrackingModal();
   }
 
+  // 4.3 Documents Tab
   function renderDocsTab(isAdmin) {
-    const filtered = state.docs.filter(d => {
-      if (!isAdmin && !isDocAssignedToUser(d, state.user.id)) return false;
-      const matchSearch = d.title.toLowerCase().includes(state.search.toLowerCase()) || d.id.toLowerCase().includes(state.search.toLowerCase());
-      const matchUrgency = state.filterUrgency === 'all' || d.urgencyLevel === state.filterUrgency;
-      return matchSearch && matchUrgency;
-    });
-
     let html = `
-      <div class="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs mb-6 flex gap-3">
-        <input type="text" placeholder="ค้นหาชื่อเอกสาร, รหัส..." value="${escapeHTML(state.search)}" oninput="DocuAckApp.setSearch(this.value)" class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500" />
+      <div class="flex items-center justify-between mb-4">
+        <h2 class="text-lg font-bold">รายการเอกสารเวียน</h2>
+        ${isAdmin ? `<button onclick="DocuAckApp.openCreateDocModal()" class="px-4 py-2 bg-amber-400 text-slate-900 font-bold rounded-xl"><i class="fa-solid fa-plus"></i> สร้างเอกสารใหม่</button>` : ''}
       </div>
       <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
     `;
 
-    filtered.forEach(doc => {
+    const filteredDocs = state.docs.filter(d => {
+      // ตรวจสอบสิทธิ์ว่าได้รับมอบหมายหรือไม่
+      const isAssigned = isAdmin || d.targetAudience === 'All' || d.targetAudience.includes(state.user.id);
+      return isAssigned;
+    });
+
+    filteredDocs.forEach(doc => {
       const isRead = Array.isArray(doc.readStatus) && doc.readStatus.includes(state.user.id);
-      const urgencyClass = doc.urgencyLevel === 'Very Urgent' ? 'rama-badge-very-urgent' : doc.urgencyLevel === 'Urgent' ? 'rama-badge-urgent' : 'rama-badge-normal';
-      
-      // ✅ แก้ไข: เพิ่มวงเล็บปิด ) หลัง escapeHTML(doc.id) อย่างถูกต้อง
       let actionHtml = isRead 
-        ? `<span class="py-2 px-3 text-xs font-bold text-emerald-700 bg-emerald-50 rounded-xl border border-emerald-200"><i class="fa-solid fa-check"></i> รับทราบแล้ว</span>`
-        : `<button onclick="DocuAckApp.acknowledgeDoc('${escapeHTML(doc.id)}')" class="flex-1 py-2 px-3 text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 rounded-xl shadow-xs"><i class="fa-solid fa-signature"></i> รับทราบเอกสาร</button>`;
+        ? `<span class="px-3 py-2 text-xs font-bold text-emerald-700 bg-emerald-50 rounded-xl"><i class="fa-solid fa-check"></i> รับทราบแล้ว</span>`
+        : `<button onclick="DocuAckApp.acknowledgeDoc('${escapeHTML(doc.id)}')" class="px-3 py-2 text-xs font-bold text-white bg-blue-600 rounded-xl">รับทราบเอกสาร</button>`;
 
       html += `
-        <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 flex flex-col justify-between">
+        <div class="bg-white rounded-2xl border border-slate-200 p-5 flex flex-col justify-between shadow-sm">
           <div>
-            <div class="flex justify-between gap-2 mb-2">
-              <span class="text-[11px] font-bold px-2 py-0.5 rounded-full ${urgencyClass}">${escapeHTML(doc.urgencyLevel)}</span>
-              <span class="text-xs font-mono font-bold text-slate-400">${escapeHTML(doc.id)}</span>
-            </div>
-            <h3 class="text-sm font-bold text-slate-900 leading-snug line-clamp-2 mb-2">${escapeHTML(doc.title)}</h3>
-            <p class="text-xs text-slate-500 line-clamp-2 mb-3">${escapeHTML(doc.description)}</p>
+            <div class="text-xs font-mono text-slate-400 mb-1">${escapeHTML(doc.id)}</div>
+            <h3 class="text-sm font-bold text-slate-900 mb-2">${escapeHTML(doc.title)}</h3>
+            <p class="text-xs text-slate-500 mb-3">เป้าหมาย: ${doc.targetAudience === 'All' ? 'ทุกคน' : 'ระบุบุคคล'}</p>
           </div>
-          <div class="pt-3 border-t border-slate-100 mt-2 flex justify-between gap-2">
-            <!-- ✅ แก้ไข: เพิ่มวงเล็บปิด ) หลัง escapeHTML(doc.id) -->
-            <button onclick="DocuAckApp.openViewer('${escapeHTML(doc.id)}')" class="flex-1 py-2 px-3 text-xs font-bold rounded-xl border border-slate-300 hover:bg-slate-50 flex items-center justify-center gap-1.5">
-              <i class="fa-regular fa-eye"></i> เปิดอ่าน
-            </button>
+          <div class="flex justify-between gap-2 border-t pt-3 border-slate-100">
+            <button onclick="DocuAckApp.openViewer('${escapeHTML(doc.id)}')" class="flex-1 px-3 py-2 text-xs font-bold border border-slate-300 rounded-xl hover:bg-slate-50"><i class="fa-regular fa-eye"></i> เปิดอ่าน</button>
+            ${isAdmin ? `<button onclick="DocuAckApp.openTrackingModal('${escapeHTML(doc.id)}')" class="px-3 py-2 text-xs font-bold bg-purple-50 text-purple-700 rounded-xl border border-purple-200">ตรวจสอบ</button>` : ''}
             ${actionHtml}
           </div>
         </div>
@@ -345,74 +180,197 @@
     return html;
   }
 
+  // 4.4 Users Tab (ตารางพนักงาน)
   function renderUsersTab() {
-    return `<div class="bg-white rounded-3xl border border-slate-200 p-6 shadow-xs"><h2 class="text-lg font-bold text-slate-900">จัดการข้อมูลบุคลากรในระบบ</h2><p class="text-xs text-slate-500 mt-2">ส่วนนี้สงวนไว้สำหรับผู้ดูแลระบบ</p></div>`;
+    let html = `
+      <div class="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
+        <h2 class="text-lg font-bold mb-4">ข้อมูลบุคลากรในระบบ (อ้างอิงจาก ชีต Users)</h2>
+        <div class="overflow-x-auto">
+          <table class="w-full text-left text-sm">
+            <thead class="bg-slate-50 border-b border-slate-200">
+              <tr>
+                <th class="py-3 px-4">รหัสพนักงาน</th>
+                <th class="py-3 px-4">ชื่อ-นามสกุล</th>
+                <th class="py-3 px-4">แผนก</th>
+                <th class="py-3 px-4">Role</th>
+                <th class="py-3 px-4">อีเมล (Email)</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-100">
+    `;
+
+    state.users.forEach(u => {
+      html += `
+        <tr class="hover:bg-slate-50">
+          <td class="py-3 px-4 font-mono font-bold">${escapeHTML(u.id)}</td>
+          <td class="py-3 px-4">${escapeHTML(u.name)}</td>
+          <td class="py-3 px-4">${escapeHTML(u.department)}</td>
+          <td class="py-3 px-4"><span class="px-2 py-1 rounded bg-slate-100 text-xs">${escapeHTML(u.role)}</span></td>
+          <td class="py-3 px-4 text-slate-500">${escapeHTML(u.email || '-')}</td>
+        </tr>
+      `;
+    });
+
+    html += `</tbody></table></div></div>`;
+    return html;
   }
 
-  function renderViewerModal() {
-    const doc = state.viewDoc;
-    const isRead = Array.isArray(doc.readStatus) && doc.readStatus.includes(state.user.id);
-    let actionHtml = !isRead 
-      ? `<button onclick="DocuAckApp.acknowledgeDoc('${escapeHTML(doc.id)}'); DocuAckApp.closeViewer();" class="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-sm font-bold shadow-md"><i class="fa-solid fa-check-double"></i> ข้าพเจ้าได้อ่านและรับทราบแล้ว</button>`
-      : `<span class="text-sm font-bold text-emerald-700 bg-emerald-50 px-4 py-2 rounded-xl border border-emerald-200"><i class="fa-solid fa-circle-check"></i> รับทราบเรียบร้อยแล้ว</span>`;
+  // --- 5. Modals ---
 
+  // 5.1 Create Document Modal (ฟอร์มสร้างเอกสารใหม่)
+  function renderCreateDocModal() {
+    const today = new Date().toISOString().split('T')[0];
+    
     document.getElementById('modal-container').innerHTML = `
-      <div class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/70 backdrop-blur-xs p-4">
-        <div class="bg-white rounded-3xl w-full max-w-4xl h-[92vh] flex flex-col shadow-2xl overflow-hidden animate-in fade-in">
-          <div class="p-4 border-b border-slate-200 flex justify-between bg-slate-50">
+      <div class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/70 p-4">
+        <div class="bg-white rounded-2xl w-full max-w-lg p-6 shadow-2xl">
+          <div class="flex justify-between items-center mb-4 border-b pb-2">
+            <h3 class="font-bold text-lg">สร้างเอกสารเวียนใหม่</h3>
+            <button onclick="DocuAckApp.closeCreateDocModal()" class="text-slate-400 font-bold hover:text-red-500">✕ ปิด</button>
+          </div>
+          <form id="createDocForm" class="space-y-3">
             <div>
-              <span class="text-xs font-mono font-bold text-slate-400">${escapeHTML(doc.id)}</span>
-              <h3 class="text-base font-bold text-slate-900 mt-1">${escapeHTML(doc.title)}</h3>
+              <label class="block text-xs font-bold mb-1">ชื่อเรื่อง</label>
+              <input type="text" id="newTitle" required class="w-full px-3 py-2 border rounded-xl" />
             </div>
-            <button onclick="DocuAckApp.closeViewer()" class="text-slate-400 hover:text-red-500 bg-white border border-slate-200 rounded-xl px-3 py-1.5 text-xs font-bold">ปิด ✕</button>
-          </div>
-          <div class="flex-1 bg-slate-200 p-2 relative">
-            <iframe src="${doc.fileUrl}" class="w-full h-full rounded-2xl border border-slate-300 bg-white" frameborder="0"></iframe>
-          </div>
-          <div class="p-4 border-t border-slate-200 flex flex-wrap items-center justify-between gap-3 bg-white">
-            <a href="${doc.fileUrl}" target="_blank" class="text-xs font-bold text-blue-600 hover:underline"><i class="fa-solid fa-arrow-up-right-from-square"></i> เปิดดูในแท็บใหม่</a>
-            <div class="flex items-center gap-2">${actionHtml}</div>
-          </div>
+            <div>
+              <label class="block text-xs font-bold mb-1">ลิงก์ไฟล์ (File URL) หรือ แนบไฟล์ลง Drive</label>
+              <input type="url" id="newFileUrl" required placeholder="https://drive.google.com/..." class="w-full px-3 py-2 border rounded-xl" />
+            </div>
+            <div class="grid grid-cols-2 gap-3">
+              <div>
+                <label class="block text-xs font-bold mb-1">ความสำคัญ</label>
+                <select id="newUrgency" class="w-full px-3 py-2 border rounded-xl">
+                  <option value="Normal">ทั่วไป</option>
+                  <option value="Urgent">ด่วนมาก</option>
+                  <option value="Very Urgent">ด่วนที่สุด</option>
+                </select>
+              </div>
+              <div>
+                <label class="block text-xs font-bold mb-1">Deadline</label>
+                <input type="date" id="newEndDate" class="w-full px-3 py-2 border rounded-xl" />
+              </div>
+            </div>
+            <button type="submit" id="btnSubmitDoc" class="w-full py-3 bg-blue-600 text-white rounded-xl font-bold mt-4">อัปโหลดเข้าเซิร์ฟเวอร์</button>
+          </form>
         </div>
       </div>
     `;
-  }
 
-  // --- 7. Expose API to Global Window (DocuAckApp Namespace) ---
-  window.DocuAckApp = {
-    reloadPage: () => location.reload(),
-    useOfflineData: () => { document.getElementById('global-loader').style.display = 'none'; render(); },
-    quickLogin: (id) => {
-      const u = state.users.find(x => String(x.id) === String(id));
-      if (u) { state.user = u; setSession(u); render(); }
-    },
-    logout: () => { state.user = null; setSession(null); render(); },
-    setTab: (t) => { state.tab = t; render(); },
-    setSearch: (s) => { state.search = s; render(); },
-    openViewer: (docId) => { state.viewDoc = state.docs.find(d => d.id === docId); renderViewerModal(); },
-    closeViewer: () => { state.viewDoc = null; document.getElementById('modal-container').innerHTML = ''; },
-    acknowledgeDoc: async (docId) => {
-      const doc = state.docs.find(d => d.id === docId);
-      if (!doc) return;
-      if (!Array.isArray(doc.readStatus)) doc.readStatus = [];
-      const uid = String(state.user.id);
-      if (doc.readStatus.includes(uid)) return;
-      
-      doc.readStatus.push(uid);
-      localStorage.setItem('docuack_cached_docs', JSON.stringify(state.docs));
-      render();
+    document.getElementById('createDocForm').onsubmit = async (e) => {
+      e.preventDefault();
+      const btn = document.getElementById('btnSubmitDoc');
+      btn.innerText = "กำลังบันทึก..."; btn.disabled = true;
+
+      const payload = {
+        action: 'addDocument',
+        data: {
+          title: document.getElementById('newTitle').value,
+          fileUrl: document.getElementById('newFileUrl').value,
+          urgencyLevel: document.getElementById('newUrgency').value,
+          startDate: today,
+          endDate: document.getElementById('newEndDate').value,
+          targetAudience: 'All'
+        }
+      };
 
       try {
         await fetch(API_URL, {
           method: 'POST',
           headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-          body: JSON.stringify({ action: 'acknowledge', docId: docId, userId: uid })
+          body: JSON.stringify(payload)
         });
-      } catch (err) { console.warn("API Error (saved locally):", err); }
+        alert('สร้างเอกสารเรียบร้อยแล้ว (รีเฟรชหน้าเว็บเพื่อดูข้อมูล)');
+        DocuAckApp.closeCreateDocModal();
+        location.reload();
+      } catch (err) {
+        alert("เกิดข้อผิดพลาดในการเชื่อมต่อ: " + err);
+        btn.innerText = "ลองอีกครั้ง"; btn.disabled = false;
+      }
+    };
+  }
+
+  // 5.2 Viewer Modal (อ่านเอกสาร)
+  function renderViewerModal() {
+    const doc = state.viewDoc;
+    document.getElementById('modal-container').innerHTML = `
+      <div class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/80 p-4">
+        <div class="bg-white rounded-2xl w-full max-w-4xl h-[90vh] flex flex-col overflow-hidden">
+          <div class="p-4 border-b flex justify-between bg-slate-50">
+            <h3 class="font-bold text-slate-900">${escapeHTML(doc.title)}</h3>
+            <button onclick="DocuAckApp.closeViewer()" class="text-slate-400 font-bold">✕ ปิด</button>
+          </div>
+          <iframe src="${doc.fileUrl}" class="w-full h-full bg-slate-100" frameborder="0"></iframe>
+        </div>
+      </div>
+    `;
+  }
+
+  // 5.3 Tracking Modal (ตรวจสอบคนอ่าน)
+  function renderTrackingModal() {
+    const doc = state.trackingDoc;
+    const readers = Array.isArray(doc.readStatus) ? doc.readStatus : [];
+    
+    // หาเป้าหมาย (ทั้งหมด หรือเฉพาะคน)
+    const targets = (doc.targetAudience === 'All') ? state.users : state.users.filter(u => doc.targetAudience.includes(u.id));
+
+    let html = `
+      <div class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/80 p-4">
+        <div class="bg-white rounded-2xl w-full max-w-xl max-h-[80vh] flex flex-col">
+          <div class="p-4 border-b flex justify-between bg-slate-50">
+            <h3 class="font-bold text-slate-900">ตรวจสอบผู้รับทราบ: ${escapeHTML(doc.id)}</h3>
+            <button onclick="DocuAckApp.closeTrackingModal()" class="text-slate-400 font-bold">✕ ปิด</button>
+          </div>
+          <div class="flex-1 overflow-y-auto p-4 space-y-2">
+    `;
+
+    targets.forEach(u => {
+      const isRead = readers.includes(u.id);
+      html += `
+        <div class="flex justify-between items-center p-2 border-b border-slate-100">
+          <div><span class="font-bold text-sm">${escapeHTML(u.name)}</span> <span class="text-xs text-slate-500">(${escapeHTML(u.id)})</span></div>
+          ${isRead ? `<span class="text-xs font-bold text-emerald-600 bg-emerald-50 px-2 py-1 rounded">รับทราบแล้ว</span>` : `<span class="text-xs font-bold text-red-600 bg-red-50 px-2 py-1 rounded">ยังไม่อ่าน</span>`}
+        </div>
+      `;
+    });
+
+    html += `</div></div></div>`;
+    document.getElementById('modal-container').innerHTML = html;
+  }
+
+
+  // --- 6. Global Window API (DocuAckApp) ---
+  window.DocuAckApp = {
+    logout: () => { state.user = null; localStorage.removeItem('docuack_session'); render(); },
+    setTab: (t) => { state.tab = t; render(); },
+    
+    openCreateDocModal: () => { state.showCreateModal = true; render(); },
+    closeCreateDocModal: () => { state.showCreateModal = false; document.getElementById('modal-container').innerHTML = ''; },
+    
+    openViewer: (docId) => { state.viewDoc = state.docs.find(d => d.id === docId); renderViewerModal(); },
+    closeViewer: () => { state.viewDoc = null; document.getElementById('modal-container').innerHTML = ''; },
+    
+    openTrackingModal: (docId) => { state.trackingDoc = state.docs.find(d => d.id === docId); renderTrackingModal(); },
+    closeTrackingModal: () => { state.trackingDoc = null; document.getElementById('modal-container').innerHTML = ''; },
+    
+    acknowledgeDoc: async (docId) => {
+      const doc = state.docs.find(d => d.id === docId);
+      if (!doc || doc.readStatus.includes(state.user.id)) return;
+      
+      doc.readStatus.push(state.user.id);
+      render(); // อัปเดต UI ทันที
+
+      try {
+        await fetch(API_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+          body: JSON.stringify({ action: 'acknowledge', docId: docId, userId: state.user.id })
+        });
+      } catch (err) { console.error("API Update Error", err); }
     }
   };
 
-  // --- 8. Application Bootstrap ---
+  // เริ่มทำงานเมื่อเบราว์เซอร์โหลดเสร็จ
   window.addEventListener('DOMContentLoaded', initApp);
 
 })();
