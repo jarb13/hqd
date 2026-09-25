@@ -4,29 +4,53 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>DocuAck - Corporate Document System</title>
+  
+  <!-- โหลดไลบรารีพื้นฐาน -->
   <script src="https://cdn.tailwindcss.com"></script>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
-  <style>
-    @import url('https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700;800&display=swap');
-    body { font-family: 'Sarabun', sans-serif; }
-    .badge-very-urgent { background-color: #fff1f2; color: #be123c; border: 1px solid #fecdd3; }
-    .badge-urgent { background-color: #fffbeb; color: #b45309; border: 1px solid #fde68a; }
-    .badge-normal { background-color: #eff6ff; color: #1d4ed8; border: 1px solid #bfdbfe; }
-  </style>
 </head>
 <body class="bg-slate-100 text-slate-800 min-h-screen">
   
+  <!-- ========================================== -->
+  <!-- 1. ส่วน HTML (โครงสร้างหลักและการแสดงผล) -->
+  <!-- ========================================== -->
+  
+  <!-- หน้าจอ Loading ดักรอระหว่างเชื่อมต่อ API -->
   <div id="global-loader" class="fixed inset-0 z-[100] bg-slate-900 flex flex-col items-center justify-center text-white">
     <div class="w-12 h-12 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mb-4"></div>
     <h2 class="text-xl font-bold mb-2">กำลังเชื่อมต่อฐานข้อมูล...</h2>
     <p class="text-slate-400 text-sm">ระบบกำลังดึงข้อมูลจาก Google Sheets</p>
   </div>
 
+  <!-- คอนเทนเนอร์หลักสำหรับเรนเดอร์เนื้อหา (SPA) -->
   <div id="app"></div>
+  <!-- คอนเทนเนอร์สำหรับหน้าต่าง Modal -->
+  <div id="modal-container"></div>
 
+  <!-- ========================================== -->
+  <!-- 2. ส่วน CSS (ปรับแต่งความสวยงามเฉพาะจุด) -->
+  <!-- ========================================== -->
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700;800&display=swap');
+    
+    body {
+      font-family: 'Sarabun', sans-serif;
+    }
+    
+    /* Semantic Class Naming สำหรับป้ายกำกับความเร่งด่วน */
+    .rama-badge-very-urgent { background-color: #fff1f2; color: #be123c; border: 1px solid #fecdd3; }
+    .rama-badge-urgent { background-color: #fffbeb; color: #b45309; border: 1px solid #fde68a; }
+    .rama-badge-normal { background-color: #eff6ff; color: #1d4ed8; border: 1px solid #bfdbfe; }
+  </style>
+
+  <!-- ========================================== -->
+  <!-- 3. ส่วน JavaScript (สมองกลของระบบ) -->
+  <!-- ========================================== -->
   <script>
-    const API_URL = "https://script.google.com/macros/s/AKfycbyXrAgyxTYu6GPx716-6dKrFuHtbEDvT2zEeGyZx5XmJXimYg2clQIsjcfQ-IqMLJjN";
+    // 🌟 API URL ตัวใหม่ (ตั้งค่าเป็น Anyone แล้ว) 🌟
+    const API_URL = "https://script.google.com/macros/s/AKfycbyXrAgyxTYu6GPx716-6dKrFuHtbEDvT2zEeGyZx5XmJXimYg2clQIsjcfQ-IqMLJjN/exec";
 
+    // --- State Management ---
     let state = {
       user: JSON.parse(localStorage.getItem('docuack_session')) || null,
       users: [], 
@@ -39,6 +63,7 @@
       showCreateModal: false
     };
 
+    // --- ฟังก์ชันเชื่อมต่อและดึงข้อมูล (API Init) ---
     async function initApp() {
       const loader = document.getElementById('global-loader');
       try {
@@ -49,6 +74,7 @@
         });
         
         if (!response.ok) throw new Error("HTTP Status: " + response.status);
+        
         const result = await response.json();
         
         if (result.status === 'success') {
@@ -58,19 +84,21 @@
           throw new Error(result.message);
         }
       } catch (error) {
-        console.error("API Error:", error);
+        console.error("API Error Details:", error);
         loader.innerHTML = `
           <div class="text-red-500 mb-4"><i class="fa-solid fa-triangle-exclamation text-5xl"></i></div>
           <h2 class="text-xl font-bold mb-2 text-red-500">เชื่อมต่อฐานข้อมูลล้มเหลว</h2>
-          <p class="text-slate-300 text-sm mb-4">โปรดตรวจสอบลิงก์ API หรือสิทธิ์การเข้าถึง Google Apps Script</p>
+          <p class="text-slate-300 text-sm mb-4">รายละเอียด: ${error.message}</p>
           <button onclick="location.reload()" class="px-4 py-2 bg-blue-600 rounded-lg font-bold hover:bg-blue-700 transition">ลองใหม่อีกครั้ง</button>
         `;
         return; 
       } 
+      
       loader.style.display = 'none';
       render();
     }
 
+    // --- ฟังก์ชันช่วยเหลือ (Helpers) ---
     function setSession(u) {
       if (u) localStorage.setItem('docuack_session', JSON.stringify(u));
       else localStorage.removeItem('docuack_session');
@@ -86,6 +114,7 @@
       return today.getTime() > end.getTime() && doc.readStatus.length < targetCount;
     }
 
+    // --- Core Render Logic ---
     function render() {
       const app = document.getElementById('app');
       if (!state.user) {
@@ -95,6 +124,7 @@
       }
     }
 
+    // --- ส่วนหน้าต่าง Login ---
     function renderLogin(app) {
       app.innerHTML = `
         <div class="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-indigo-950 flex flex-col justify-center py-12 px-4 sm:px-6 lg:px-8">
@@ -134,6 +164,7 @@
         const err = document.getElementById('loginError');
         
         const u = state.users.find(x => String(x.id).toUpperCase() === id);
+        
         if (!u) {
           err.innerText = "ไม่พบรหัสผู้ใช้ในระบบ";
           err.classList.remove('hidden');
@@ -144,12 +175,14 @@
           err.classList.remove('hidden');
           return;
         }
+        
         state.user = u;
         setSession(u);
         render();
       };
     }
 
+    // --- ส่วนหน้า Dashboard ---
     function renderDashboard(app) {
       const isAdmin = state.user.role === 'Admin';
       const roleText = isAdmin ? 'Admin' : 'บุคลากรทั่วไป';
@@ -201,8 +234,6 @@
           </div>
           <div id="docs-tab-container"></div>
         </main>
-        
-        <div id="modal-container"></div>
       `;
 
       document.getElementById('docs-tab-container').innerHTML = renderDocsTab();
@@ -210,6 +241,7 @@
       if (state.showCreateModal) renderCreateDocModal();
     }
 
+    // --- ส่วนแสดงรายการเอกสาร (Docs List) ---
     function renderDocsTab() {
       const filtered = state.docs.filter(d => {
         const matchSearch = d.title.toLowerCase().includes(state.search.toLowerCase()) || d.id.toLowerCase().includes(state.search.toLowerCase());
@@ -252,7 +284,7 @@
       filtered.forEach(doc => {
         const isRead = doc.readStatus.includes(state.user.id);
         const overdue = isDocOverdue(doc);
-        const urgencyClass = doc.urgencyLevel === 'Very Urgent' ? 'badge-very-urgent' : doc.urgencyLevel === 'Urgent' ? 'badge-urgent' : 'badge-normal';
+        const urgencyClass = doc.urgencyLevel === 'Very Urgent' ? 'rama-badge-very-urgent' : doc.urgencyLevel === 'Urgent' ? 'rama-badge-urgent' : 'rama-badge-normal';
         const urgencyLabel = doc.urgencyLevel === 'Very Urgent' ? '🔴 ด่วนที่สุด' : doc.urgencyLevel === 'Urgent' ? '🟠 ด่วนมาก' : '🟢 ทั่วไป';
         const endDateLabel = doc.endDate || '-';
         const overdueHtml = (overdue && !isRead) ? '<span class="text-red-600 font-bold"><i class="fa-solid fa-triangle-exclamation mr-1"></i> เกินกำหนด!</span>' : '';
@@ -296,6 +328,7 @@
       return html;
     }
 
+    // --- ส่วนแสดงเอกสาร (Viewer Modal) ---
     function renderViewerModal() {
       const doc = state.viewDoc;
       const isRead = doc.readStatus.includes(state.user.id);
@@ -331,6 +364,7 @@
       `;
     }
 
+    // --- ส่วนอัปโหลดเอกสาร (Create Document Modal) ---
     function renderCreateDocModal() {
       const todayString = new Date().toISOString().split('T')[0];
       document.getElementById('modal-container').innerHTML = `
@@ -436,6 +470,7 @@
       };
     }
 
+    // --- Action Handlers ---
     window.logout = function() { state.user = null; setSession(null); render(); };
     window.setTab = function(t) { state.tab = t; render(); };
     window.setSearch = function(s) { state.search = s; render(); };
@@ -479,6 +514,7 @@
       }
     };
 
+    // --- Initialization ---
     window.onload = initApp;
   </script>
 </body>
