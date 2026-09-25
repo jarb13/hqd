@@ -316,9 +316,10 @@
       const isRead = Array.isArray(doc.readStatus) && doc.readStatus.includes(state.user.id);
       const urgencyClass = doc.urgencyLevel === 'Very Urgent' ? 'rama-badge-very-urgent' : doc.urgencyLevel === 'Urgent' ? 'rama-badge-urgent' : 'rama-badge-normal';
       
+      // ✅ แก้ไข: เพิ่มวงเล็บปิด ) หลัง escapeHTML(doc.id) อย่างถูกต้อง
       let actionHtml = isRead 
         ? `<span class="py-2 px-3 text-xs font-bold text-emerald-700 bg-emerald-50 rounded-xl border border-emerald-200"><i class="fa-solid fa-check"></i> รับทราบแล้ว</span>`
-        : `<button onclick="DocuAckApp.acknowledgeDoc('${escapeHTML(doc.id}')" class="flex-1 py-2 px-3 text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 rounded-xl shadow-xs"><i class="fa-solid fa-signature"></i> รับทราบเอกสาร</button>`;
+        : `<button onclick="DocuAckApp.acknowledgeDoc('${escapeHTML(doc.id)}')" class="flex-1 py-2 px-3 text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 rounded-xl shadow-xs"><i class="fa-solid fa-signature"></i> รับทราบเอกสาร</button>`;
 
       html += `
         <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 flex flex-col justify-between">
@@ -331,7 +332,8 @@
             <p class="text-xs text-slate-500 line-clamp-2 mb-3">${escapeHTML(doc.description)}</p>
           </div>
           <div class="pt-3 border-t border-slate-100 mt-2 flex justify-between gap-2">
-            <button onclick="DocuAckApp.openViewer('${escapeHTML(doc.id}')" class="flex-1 py-2 px-3 text-xs font-bold rounded-xl border border-slate-300 hover:bg-slate-50 flex items-center justify-center gap-1.5">
+            <!-- ✅ แก้ไข: เพิ่มวงเล็บปิด ) หลัง escapeHTML(doc.id) -->
+            <button onclick="DocuAckApp.openViewer('${escapeHTML(doc.id)}')" class="flex-1 py-2 px-3 text-xs font-bold rounded-xl border border-slate-300 hover:bg-slate-50 flex items-center justify-center gap-1.5">
               <i class="fa-regular fa-eye"></i> เปิดอ่าน
             </button>
             ${actionHtml}
