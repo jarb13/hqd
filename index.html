@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>DocuAck - Corporate Document Acknowledgement System</title>
+  <title>DocuAck - Corporate Document System</title>
   
   <!-- โหลดทรัพยากรพื้นฐาน (Tailwind & Icons) -->
   <script src="https://cdn.tailwindcss.com"></script>
@@ -14,6 +14,15 @@
   <!-- ========================================== -->
   <!-- 1. HTML ส่วนแสดงผลหลัก (App Container) -->
   <!-- ========================================== -->
+  
+  <!-- หน้าจอโหลดข้อมูลเริ่มต้น -->
+  <div id="global-loader" class="fixed inset-0 z-[100] bg-slate-900 flex flex-col items-center justify-center text-white">
+    <div class="w-12 h-12 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mb-4"></div>
+    <h2 class="text-xl font-bold mb-2">กำลังเชื่อมต่อฐานข้อมูล...</h2>
+    <p class="text-slate-400 text-sm">ระบบกำลังดึงข้อมูลจาก Google Sheets</p>
+  </div>
+
+  <!-- กล่องหลักสำหรับเรนเดอร์เนื้อหาเว็บ -->
   <div id="app"></div>
 
   <!-- ========================================== -->
@@ -26,83 +35,70 @@
       font-family: 'Sarabun', sans-serif;
     }
     
-    /* คลาสตกแต่งป้ายสถานะความเร่งด่วน */
-    .badge-very-urgent {
-      background-color: #fff1f2;
-      color: #be123c;
-      border: 1px solid #fecdd3;
-    }
-    .badge-urgent {
-      background-color: #fffbeb;
-      color: #b45309;
-      border: 1px solid #fde68a;
-    }
-    .badge-normal {
-      background-color: #eff6ff;
-      color: #1d4ed8;
-      border: 1px solid #bfdbfe;
-    }
+    .badge-very-urgent { background-color: #fff1f2; color: #be123c; border: 1px solid #fecdd3; }
+    .badge-urgent { background-color: #fffbeb; color: #b45309; border: 1px solid #fde68a; }
+    .badge-normal { background-color: #eff6ff; color: #1d4ed8; border: 1px solid #bfdbfe; }
   </style>
 
   <!-- ========================================== -->
   <!-- 3. JavaScript ส่วนสมองกล (วางล่างสุดเสมอ) -->
   <!-- ========================================== -->
   <script>
-    // --- ตั้งค่าข้อมูลเริ่มต้น (Mock Data) ---
-    const INITIAL_USERS = [
-      { id: '020482', name: 'ธนพล จันทรพร', role: 'Admin', pin: '020482', department: 'บริหารงานทั่วไป / ผู้บริหาร', email: 'jarbtanapol@gmail.com' },
-      { id: '010363', name: 'นิภาพร จีนไม้', role: 'User', pin: '010363', department: 'เจ้าหน้าที่ปฏิบัติการ', email: '010363@corporation.com' }
-    ];
-
-    const INITIAL_DOCUMENTS = [
-      {
-        id: 'DOC-2026-001',
-        title: 'Mandatory Q3 Cyber Security & Phishing Protection Protocol',
-        fileUrl: 'https://drive.google.com/file/d/1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms/preview',
-        urgencyLevel: 'Very Urgent',
-        startDate: '2026-09-01',
-        endDate: '2026-09-15',
-        targetAudience: 'All',
-        readStatus: ['020482'],
-        category: 'IT Security',
-        description: 'Guidelines on mandatory 2-Factor Authentication, zero-trust access...',
-        createdAt: 1710000000000 // เพิ่ม Timestamp เพื่อการจัดเรียง
-      }
-    ];
-
-    // --- ฟังก์ชันช่วยเหลือ (Local Storage Helpers) ---
-    function getUsers() { return JSON.parse(localStorage.getItem('docuack_standalone_users')) || INITIAL_USERS; }
-    function saveUsers(users) { localStorage.setItem('docuack_standalone_users', JSON.stringify(users)); }
-    function getDocs() { return JSON.parse(localStorage.getItem('docuack_standalone_docs')) || INITIAL_DOCUMENTS; }
-    function saveDocs(docs) { localStorage.setItem('docuack_standalone_docs', JSON.stringify(docs)); }
-    function getSession() { return JSON.parse(localStorage.getItem('docuack_standalone_session')) || null; }
-    function setSession(u) {
-      if (u) localStorage.setItem('docuack_standalone_session', JSON.stringify(u));
-      else localStorage.removeItem('docuack_standalone_session');
-    }
+    // 🌟 นำ API URL ที่คุณได้จาก GAS มาใส่ตรงนี้ครับ 🌟
+    const API_URL = "https://script.google.com/macros/s/AKfycbz35SzlW13fEZ1qtNiLxHkgqJC-nMY5kCMA99v-lNN_dOr9iCVmS9dxm_QdgbgzDvCA/exec";
 
     // --- State ของแอปพลิเคชัน ---
     let state = {
-      user: getSession(),
-      users: getUsers(),
-      docs: getDocs(),
+      user: JSON.parse(localStorage.getItem('docuack_session')) || null,
+      users: [], // จะถูกดึงจาก Google Sheets
+      docs: [],  // จะถูกดึงจาก Google Sheets
       tab: 'documents',
       search: '',
       filterUrgency: 'all',
       filterStatus: 'all',
       viewDoc: null,
-      showCreateModal: false,
-      editUserModal: null,
-      showAddUserModal: false
+      showCreateModal: false
     };
 
+    // --- ฟังก์ชันหลักในการดึงข้อมูลจาก API (GAS) ---
+    async function initApp() {
+      try {
+        const response = await fetch(API_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+          body: JSON.stringify({ action: 'getAppData' })
+        });
+        const result = await response.json();
+        
+        if (result.status === 'success') {
+          state.users = result.data.users;
+          state.docs = result.data.docs;
+        } else {
+          alert("เกิดข้อผิดพลาดในการดึงข้อมูล: " + result.message);
+        }
+      } catch (error) {
+        console.error("API Error:", error);
+        alert("ไม่สามารถเชื่อมต่อฐานข้อมูลได้ กรุณาลองรีเฟรชหน้าเว็บ");
+      } finally {
+        // ปิดหน้าจอโหลด และเรนเดอร์หน้าเว็บ
+        document.getElementById('global-loader').style.display = 'none';
+        render();
+      }
+    }
+
+    // --- ฟังก์ชันช่วยเหลือ ---
+    function setSession(u) {
+      if (u) localStorage.setItem('docuack_session', JSON.stringify(u));
+      else localStorage.removeItem('docuack_session');
+    }
+
     function isDocOverdue(doc) {
+      if (!doc.endDate) return false;
       const today = new Date();
       today.setHours(0, 0, 0, 0);
-      const [y, m, d] = doc.endDate.split('-').map(Number);
-      const end = new Date(y, m - 1, d);
+      const end = new Date(doc.endDate);
       end.setHours(23, 59, 59, 999);
-      const targetCount = doc.targetAudience === 'All' ? state.users.length : doc.targetAudience.length;
+      const targetCount = doc.targetAudience === 'All' ? state.users.length : (doc.targetAudience.split(',').length);
       return today.getTime() > end.getTime() && doc.readStatus.length < targetCount;
     }
 
@@ -116,8 +112,10 @@
       }
     }
 
+    // =====================================
+    // 1. หน้า Login (ถอดปุ่ม Quick Login ออก)
+    // =====================================
     function renderLogin(app) {
-      // ตัดส่วนปุ่ม Quick Login ออกตาม Request
       app.innerHTML = `
         <div class="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-indigo-950 flex flex-col justify-center py-12 px-4 sm:px-6 lg:px-8">
           <div class="sm:mx-auto sm:w-full sm:max-w-md">
@@ -130,7 +128,7 @@
             </div>
 
             <div class="bg-white rounded-2xl shadow-xl p-8 border border-slate-200">
-              <h2 class="text-base font-bold text-slate-800 mb-4">เข้าสู่ระบบด้วยรหัสพนักงาน</h2>
+              <h2 class="text-base font-bold text-slate-800 mb-4 text-center">เข้าสู่ระบบ</h2>
               <form id="loginForm" class="space-y-4">
                 <div>
                   <label class="block text-xs font-bold text-slate-600 uppercase mb-1">รหัสพนักงาน (Employee ID)</label>
@@ -140,8 +138,8 @@
                   <label class="block text-xs font-bold text-slate-600 uppercase mb-1">รหัสผ่าน (PIN)</label>
                   <input type="password" id="loginPin" required placeholder="กรอกรหัสผ่าน" class="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-blue-600" />
                 </div>
-                <div id="loginError" class="text-xs text-red-600 hidden font-medium"></div>
-                <button type="submit" class="w-full py-2.5 px-4 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-sm font-bold shadow-md transition-colors cursor-pointer">
+                <div id="loginError" class="text-xs text-red-600 hidden font-medium text-center bg-red-50 p-2 rounded-lg border border-red-200"></div>
+                <button type="submit" class="w-full py-3 px-4 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-sm font-bold shadow-md transition-colors cursor-pointer">
                   เข้าสู่ระบบ
                 </button>
               </form>
@@ -154,28 +152,34 @@
         e.preventDefault();
         const id = document.getElementById('loginId').value.trim().toUpperCase();
         const pin = document.getElementById('loginPin').value.trim();
-        const u = state.users.find(x => x.id.toUpperCase() === id);
-        
         const err = document.getElementById('loginError');
+        
+        const u = state.users.find(x => String(x.id).toUpperCase() === id);
+        
         if (!u) {
           err.innerText = `ไม่พบรหัสผู้ใช้ '${id}' ในระบบ`;
           err.classList.remove('hidden');
           return;
         }
-        if (pin !== u.pin && pin !== u.id && pin !== '1234' && pin !== 'ADMIN123') {
+        if (pin !== String(u.pin)) {
           err.innerText = 'รหัสผ่าน PIN ไม่ถูกต้อง';
           err.classList.remove('hidden');
           return;
         }
+        
+        // ล็อกอินสำเร็จ
         state.user = u;
         setSession(u);
         render();
       };
     }
 
+    // =====================================
+    // 2. หน้า Dashboard 
+    // =====================================
     function renderDashboard(app) {
       const isAdmin = state.user.role === 'Admin';
-
+      
       app.innerHTML = `
         <header class="bg-white border-b border-slate-200 sticky top-0 z-30 shadow-xs">
           <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex items-center justify-between h-16">
@@ -209,43 +213,29 @@
         <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
           ${isAdmin ? renderAdminHero() : ''}
 
-          <div class="flex items-center gap-2 border-b border-slate-200 mb-6">
-            <button onclick="setTab('documents')" class="py-2.5 px-4 text-sm font-bold border-b-2 ${state.tab === 'documents' ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-500 hover:text-slate-700'} cursor-pointer">
-              <i class="fa-regular fa-folder-open mr-1.5"></i> รายการเอกสาร (${state.docs.length})
-            </button>
-            ${isAdmin ? `
-              <button onclick="setTab('users')" class="py-2.5 px-4 text-sm font-bold border-b-2 ${state.tab === 'users' ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-500 hover:text-slate-700'} cursor-pointer">
-                <i class="fa-solid fa-users mr-1.5"></i> จัดการผู้ใช้งาน (${state.users.length})
-              </button>
-            ` : ''}
-            <a href="https://docs.google.com/spreadsheets/d/167gvGXW7EeK4fdKJED1TKhqRiMJmFkte5-sH3Ybigk8/edit?usp=sharing" target="_blank" class="ml-auto text-xs font-bold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 px-3 py-1.5 rounded-lg flex items-center gap-1.5 transition-colors">
-              <i class="fa-solid fa-table text-emerald-600"></i> Google Sheet
-            </a>
+          <div class="flex items-center gap-2 border-b border-slate-200 mb-6 pb-2">
+            <h2 class="text-xl font-bold text-slate-800"><i class="fa-regular fa-folder-open mr-2"></i> รายการเอกสารเวียนทั้งหมด</h2>
           </div>
 
-          ${state.tab === 'documents' ? renderDocsTab() : renderUsersTab()}
+          ${renderDocsTab()}
         </main>
 
         ${state.viewDoc ? renderViewerModal() : ''}
         ${state.showCreateModal ? renderCreateDocModal() : ''}
-        ${state.editUserModal ? renderEditUserModal() : ''}
-        ${state.showAddUserModal ? renderAddUserModal() : ''}
       `;
     }
 
     function renderAdminHero() {
       return `
-        <div class="mb-8 p-6 rounded-2xl bg-gradient-to-r from-blue-700 via-indigo-600 to-indigo-800 text-white shadow-xl relative overflow-hidden flex flex-col md:flex-row items-center justify-between gap-6">
+        <div class="mb-8 p-6 rounded-2xl bg-gradient-to-r from-blue-700 via-indigo-600 to-indigo-800 text-white shadow-xl relative flex flex-col md:flex-row items-center justify-between gap-6">
           <div class="relative z-10 max-w-2xl">
-            <h2 class="text-2xl font-black tracking-tight text-white mb-1.5">สร้างและส่งเอกสารใหม่ให้บุคลากรรับทราบ</h2>
-            <p class="text-xs text-blue-100 leading-relaxed">
-              ออกประกาศ นโยบาย แนบไฟล์เอกสาร และติดตามการรับทราบผลแบบเรียลไทม์
-            </p>
+            <h2 class="text-2xl font-black tracking-tight text-white mb-1.5">พื้นที่ผู้ดูแลระบบ (Admin)</h2>
+            <p class="text-sm text-blue-100 leading-relaxed">ออกประกาศ นโยบาย แนบไฟล์เอกสาร และติดตามผลจากฐานข้อมูล Google Sheets</p>
           </div>
           <div class="relative z-10 shrink-0">
-            <button onclick="openCreateDocModal()" class="px-6 py-3.5 bg-amber-400 hover:bg-amber-300 active:bg-amber-500 text-slate-900 font-extrabold text-sm rounded-xl shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 transition-all flex items-center gap-2 cursor-pointer">
-              <i class="fa-solid fa-circle-plus text-base"></i>
-              <span>+ แนบเอกสารใหม่</span>
+            <button onclick="openCreateDocModal()" class="px-6 py-3.5 bg-amber-400 hover:bg-amber-300 active:bg-amber-500 text-slate-900 font-extrabold text-sm rounded-xl shadow-lg transition-all flex items-center gap-2 cursor-pointer">
+              <i class="fa-solid fa-cloud-arrow-up text-base"></i>
+              <span>อัปโหลดเอกสารใหม่</span>
             </button>
           </div>
         </div>
@@ -253,23 +243,23 @@
     }
 
     function renderDocsTab() {
-      // เรียงลำดับเอกสารตามเวลาแนบไฟล์ล่าสุด (createdAt DESC)
-      const sortedDocs = [...state.docs].sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
-      
-      const filtered = sortedDocs.filter(d => {
+      // เอกสารถูกเรียงลำดับจาก GAS มาแล้ว (ใหม่สุดขึ้นก่อน)
+      const filtered = state.docs.filter(d => {
         const matchSearch = d.title.toLowerCase().includes(state.search.toLowerCase()) || d.id.toLowerCase().includes(state.search.toLowerCase());
         const matchUrgency = state.filterUrgency === 'all' || d.urgencyLevel === state.filterUrgency;
+        
         let matchStatus = true;
         const isRead = d.readStatus.includes(state.user.id);
         const overdue = isDocOverdue(d);
         if (state.filterStatus === 'unread') matchStatus = !isRead;
         else if (state.filterStatus === 'read') matchStatus = isRead;
         else if (state.filterStatus === 'overdue') matchStatus = overdue;
+        
         return matchSearch && matchUrgency && matchStatus;
       });
 
       return `
-        <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-xs mb-6 flex flex-col md:flex-row gap-3 items-center justify-between">
+        <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm mb-6 flex flex-col md:flex-row gap-3 items-center justify-between">
           <div class="w-full md:w-80 relative">
             <input type="text" placeholder="ค้นหาชื่อเอกสาร หรือรหัส..." value="${state.search}" oninput="setSearch(this.value)" class="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500" />
             <i class="fa-solid fa-magnifying-glass absolute left-3 top-3 text-slate-400 text-xs"></i>
@@ -307,16 +297,15 @@
                     <span class="text-xs font-mono font-bold text-slate-400">${doc.id}</span>
                   </div>
                   <h3 class="text-sm font-bold text-slate-900 leading-snug line-clamp-2 mb-2">${doc.title}</h3>
-                  <p class="text-xs text-slate-500 line-clamp-2 mb-4">${doc.description}</p>
                 </div>
 
-                <div class="pt-4 border-t border-slate-100">
+                <div class="pt-4 mt-2 border-t border-slate-100">
                   <div class="flex items-center justify-between text-[11px] text-slate-500 mb-3">
-                    <span><i class="fa-regular fa-calendar mr-1"></i> กำหนด: ${doc.endDate}</span>${overdue && !isRead ? '<span class="text-red-600 font-bold"><i class="fa-solid fa-triangle-exclamation mr-1"></i> เกินกำหนด!</span>' : ''}
+                    <span><i class="fa-regular fa-calendar mr-1"></i> สิ้นสุด: ${doc.endDate \vert{}\vert{} '-'}</span>${overdue && !isRead ? '<span class="text-red-600 font-bold"><i class="fa-solid fa-triangle-exclamation mr-1"></i> เกินกำหนด!</span>' : ''}
                   </div>
                   <div class="flex items-center justify-between gap-2">
                     <button onclick="openViewer('${doc.id}')" class="flex-1 py-2 px-3 text-xs font-bold rounded-xl border border-slate-300 hover:bg-slate-50 transition-colors flex items-center justify-center gap-1.5 cursor-pointer">
-                      <i class="fa-regular fa-eye"></i> ดูเอกสาร
+                      <i class="fa-regular fa-eye"></i> เปิดอ่าน
                     </button>
                     ${isRead ? `
                       <span class="py-2 px-3 text-xs font-bold text-emerald-700 bg-emerald-50 rounded-xl border border-emerald-200 flex items-center gap-1">
@@ -324,7 +313,7 @@
                       </span>
                     ` : `
                       <button onclick="acknowledgeDoc('${doc.id}')" class="flex-1 py-2 px-3 text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 rounded-xl shadow-sm transition-colors flex items-center justify-center gap-1 cursor-pointer">
-                        <i class="fa-solid fa-signature"></i> รับทราบเอกสาร
+                        <i class="fa-solid fa-signature"></i> กดรับทราบ
                       </button>
                     `}
                   </div>
@@ -337,58 +326,99 @@
       `;
     }
 
-    function renderCreateDocModal() {
-      // เปลี่ยน Input URL เป็นช่องอัปโหลดไฟล์ (type="file")
+    // =====================================
+    // 3. Modal ใช้งานเอกสาร
+    // =====================================
+    function renderViewerModal() {
+      const doc = state.viewDoc;
+      const isRead = doc.readStatus.includes(state.user.id);
       return `
-        <div class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-4">
+        <div class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/70 backdrop-blur-sm p-4">
+          <div class="bg-white rounded-2xl w-full max-w-4xl h-[90vh] flex flex-col shadow-2xl overflow-hidden">
+            <div class="p-4 border-b border-slate-200 flex items-center justify-between bg-slate-50">
+              <div>
+                <span class="text-xs font-mono font-bold text-slate-400">${doc.id}</span>
+                <h3 class="text-base font-bold text-slate-900">${doc.title}</h3>
+              </div>
+              <button onclick="closeViewer()" class="text-slate-400 hover:text-red-500 bg-white border border-slate-200 rounded-lg px-3 py-1 text-sm font-bold cursor-pointer transition-colors">ปิด ✕</button>
+            </div>
+            <div class="flex-1 bg-slate-200 p-2 relative">
+              <!-- แสดงผล PDF หรือ รูปภาพ จาก Google Drive -->
+              <iframe src="${doc.fileUrl}" class="w-full h-full rounded-xl border border-slate-300 bg-white" frameborder="0"></iframe>
+            </div>
+            <div class="p-4 border-t border-slate-200 flex items-center justify-between bg-white">
+              <a href="${doc.fileUrl}" target="_blank" class="text-xs font-bold text-blue-600 hover:underline">
+                <i class="fa-solid fa-arrow-up-right-from-square mr-1"></i> ดูในแท็บใหม่
+              </a>
+              ${!isRead ? `
+                <button onclick="acknowledgeDoc('${doc.id}'); closeViewer();" class="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-sm font-bold shadow-md cursor-pointer transition-colors">
+                  <i class="fa-solid fa-check-double mr-1"></i> ข้าพเจ้าได้อ่านและรับทราบแล้ว
+                </button>
+              ` : `
+                <span class="text-sm font-bold text-emerald-700 bg-emerald-50 px-4 py-2 rounded-xl border border-emerald-200">
+                  <i class="fa-solid fa-check-circle mr-1"></i> รับทราบเรียบร้อยแล้ว
+                </span>
+              `}
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    // =====================================
+    // 4. Modal อัปโหลดเอกสารเข้า Google Drive
+    // =====================================
+    function renderCreateDocModal() {
+      return `
+        <div class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/70 backdrop-blur-sm p-4">
           <div class="bg-white rounded-2xl w-full max-w-lg p-6 shadow-2xl">
             <div class="flex items-center justify-between mb-4 pb-3 border-b border-slate-100">
-              <h3 class="text-base font-bold text-slate-900">สร้างเอกสารใหม่ (Upload Doc)</h3>
-              <button onclick="closeCreateDocModal()" class="text-slate-400 hover:text-slate-600 cursor-pointer">✕</button>
+              <h3 class="text-lg font-bold text-slate-900"><i class="fa-solid fa-cloud-arrow-up mr-2 text-blue-600"></i>อัปโหลดเอกสารเวียน</h3>
+              <button onclick="closeCreateDocModal()" class="text-slate-400 hover:text-slate-600 cursor-pointer text-xl">✕</button>
             </div>
-            <form id="createDocForm" class="space-y-3.5 text-xs">
+            
+            <form id="createDocForm" class="space-y-4 text-sm">
               <div>
-                <label class="block font-bold text-slate-700 mb-1">ชื่อเอกสาร / นโยบาย</label>
-                <input type="text" id="newTitle" required placeholder="เช่น ประกาศข้อบังคับการทำงาน..." class="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-600" />
+                <label class="block font-bold text-slate-700 mb-1">ชื่อเรื่อง / ประกาศ <span class="text-red-500">*</span></label>
+                <input type="text" id="newTitle" required class="w-full px-3 py-2.5 bg-slate-50 border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500" />
               </div>
               
-              <!-- ช่องอัปโหลดไฟล์เอกสาร -->
-              <div>
-                <label class="block font-bold text-slate-700 mb-1">แนบไฟล์ (PDF หรือรูปภาพ)</label>
-                <input type="file" id="newFile" accept="image/*,application/pdf" required class="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-600 file:mr-4 file:py-1 file:px-3 file:rounded-full file:border-0 file:text-[10px] file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100" />
+              <div class="p-3 bg-blue-50 border border-blue-100 rounded-xl">
+                <label class="block font-bold text-blue-900 mb-1">แนบไฟล์ (PDF หรือ รูปภาพ) <span class="text-red-500">*</span></label>
+                <input type="file" id="newFile" accept="image/*,application/pdf" required class="w-full text-sm file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-sm file:font-bold file:bg-blue-600 file:text-white hover:file:bg-blue-700 cursor-pointer" />
               </div>
 
               <div class="grid grid-cols-2 gap-3">
                 <div>
                   <label class="block font-bold text-slate-700 mb-1">ระดับความเร่งด่วน</label>
-                  <select id="newUrgency" class="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-600 font-semibold">
-                    <option value="Very Urgent">🔴 Very Urgent (ด่วนที่สุด)</option>
-                    <option value="Urgent">🟠 Urgent (ด่วนมาก)</option>
-                    <option value="Normal" selected>🟢 Normal (ทั่วไป)</option>
+                  <select id="newUrgency" class="w-full px-3 py-2.5 bg-slate-50 border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 font-semibold">
+                    <option value="Very Urgent">🔴 ด่วนที่สุด</option>
+                    <option value="Urgent">🟠 ด่วนมาก</option>
+                    <option value="Normal" selected>🟢 ทั่วไป</option>
                   </select>
                 </div>
                 <div>
                   <label class="block font-bold text-slate-700 mb-1">หมวดหมู่</label>
-                  <input type="text" id="newCategory" value="General Policy" class="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-600" />
+                  <input type="text" id="newCategory" value="ประกาศทั่วไป" class="w-full px-3 py-2.5 bg-slate-50 border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500" />
                 </div>
               </div>
+              
               <div class="grid grid-cols-2 gap-3">
                 <div>
-                  <label class="block font-bold text-slate-700 mb-1">วันที่สื่อสาร (Start Date)</label>
-                  <input type="date" id="newStartDate" value="${new Date().toISOString().split('T')[0]}" class="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-600" />
+                  <label class="block font-bold text-slate-700 mb-1">วันที่ประกาศ</label>
+                  <input type="date" id="newStartDate" value="${new Date().toISOString().split('T')[0]}" class="w-full px-3 py-2.5 bg-slate-50 border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500" />
                 </div>
                 <div>
-                  <label class="block font-bold text-slate-700 mb-1">กำหนดสิ้นสุดรับทราบ (End Date)</label>
-                  <input type="date" id="newEndDate" value="${new Date(Date.now() + 14 * 86400000).toISOString().split('T')[0]}" class="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-600" />
+                  <label class="block font-bold text-slate-700 mb-1">เส้นตาย (Deadline)</label>
+                  <input type="date" id="newEndDate" class="w-full px-3 py-2.5 bg-slate-50 border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500" />
                 </div>
               </div>
-              <div>
-                <label class="block font-bold text-slate-700 mb-1">คำอธิบาย</label>
-                <textarea id="newDesc" rows="2" class="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-600" placeholder="รายละเอียดหรือวัตถุประสงค์ของเอกสาร"></textarea>
-              </div>
-              <div class="pt-3 border-t border-slate-100 flex items-center justify-end gap-2">
-                <button type="button" onclick="closeCreateDocModal()" class="px-4 py-2 font-bold text-slate-500 hover:bg-slate-100 rounded-xl cursor-pointer">ยกเลิก</button>
-                <button type="submit" id="btnSubmitDoc" class="px-5 py-2 font-bold text-white bg-blue-600 hover:bg-blue-700 rounded-xl shadow-sm cursor-pointer transition-colors">อัปโหลดและเผยแพร่เอกสาร</button>
+              
+              <div class="pt-4 border-t border-slate-100 flex items-center justify-end gap-3">
+                <button type="button" onclick="closeCreateDocModal()" class="px-5 py-2.5 font-bold text-slate-600 hover:bg-slate-100 rounded-xl cursor-pointer transition-colors">ยกเลิก</button>
+                <button type="submit" id="btnSubmitDoc" class="px-6 py-2.5 font-bold text-white bg-blue-600 hover:bg-blue-700 rounded-xl shadow-md cursor-pointer transition-colors">
+                  เริ่มอัปโหลดเข้าเซิร์ฟเวอร์
+                </button>
               </div>
             </form>
           </div>
@@ -396,16 +426,23 @@
       `;
     }
 
-    // (ส่วนจัดการ Users ยังคงเดิม)
-    function renderUsersTab() { ... }
-    function renderEditUserModal() { ... }
-    function renderAddUserModal() { ... }
-    function renderViewerModal() { ... } // (ข้ามส่วนที่ไม่ได้แก้ไขเพื่อความกระชับในตัวอย่าง)
+    // =====================================
+    // 5. Handlers & API Calls
+    // =====================================
+    window.logout = function() {
+      state.user = null;
+      setSession(null);
+      render();
+    };
 
-    // นำฟังก์ชัน render องค์ประกอบอื่นมาต่อจากจุดนี้ (ใช้โค้ดเดิมของคุณได้เลย)
-    // ...
-    // เนื่องจากตัวอักษรจำกัด ผมจะแสดงเฉพาะ Event Handlers ที่มีการแก้ไขระบบอัปโหลดไฟล์ครับ
+    window.setTab = function(t) { state.tab = t; render(); };
+    window.setSearch = function(s) { state.search = s; render(); };
+    window.setFilterUrgency = function(u) { state.filterUrgency = u; render(); };
+    window.setFilterStatus = function(st) { state.filterStatus = st; render(); };
+    window.openViewer = function(docId) { state.viewDoc = state.docs.find(d => d.id === docId); render(); };
+    window.closeViewer = function() { state.viewDoc = null; render(); };
 
+    // --- API: อัปโหลดเอกสาร (แปลงไฟล์เป็น Base64 แล้วส่งให้ GAS) ---
     window.openCreateDocModal = function() {
       state.showCreateModal = true;
       render();
@@ -414,51 +451,103 @@
         e.preventDefault();
         
         const fileInput = document.getElementById('newFile');
-        if (fileInput.files.length === 0) {
-          alert('กรุณาเลือกไฟล์เพื่อแนบเอกสาร');
-          return;
-        }
+        if (fileInput.files.length === 0) return alert('กรุณาเลือกไฟล์เอกสาร');
 
         const file = fileInput.files[0];
         const reader = new FileReader();
         
-        // UI Feedback: เปลี่ยนปุ่มให้แสดงสถานะกำลังโหลด
         const submitBtn = document.getElementById('btnSubmitDoc');
-        submitBtn.innerText = "กำลังอัปโหลดไฟล์...";
+        submitBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-2"></i> กำลังอัปโหลดไปยัง Google Drive...';
         submitBtn.disabled = true;
+        submitBtn.classList.replace('bg-blue-600', 'bg-slate-400');
 
-        // เมื่อ FileReader แปลงไฟล์เป็น Base64 สำเร็จ
-        reader.onload = function(event) {
-          const fileDataUrl = event.target.result; 
+        reader.onload = async function(event) {
+          const base64Data = event.target.result; 
 
-          const newDoc = {
-            id: 'DOC-2026-' + String(state.docs.length + 1).padStart(3, '0'),
-            title: document.getElementById('newTitle').value.trim(),
-            fileUrl: fileDataUrl, // เก็บ Data URL (Base64) เพื่อใช้ Preview
-            urgencyLevel: document.getElementById('newUrgency').value,
-            category: document.getElementById('newCategory').value.trim() || 'General Policy',
-            startDate: document.getElementById('newStartDate').value,
-            endDate: document.getElementById('newEndDate').value,
-            description: document.getElementById('newDesc').value.trim() || 'นโยบายและระเบียบปฏิบัติองค์กร',
-            targetAudience: 'All',
-            readStatus: [],
-            createdAt: Date.now() // สร้าง Timestamp เพื่อให้เรียงลำดับถูกเสมอ
+          const payload = {
+            action: 'addDocument',
+            data: {
+              title: document.getElementById('newTitle').value.trim(),
+              fileBase64: base64Data,
+              fileName: file.name,
+              urgencyLevel: document.getElementById('newUrgency').value,
+              category: document.getElementById('newCategory').value.trim(),
+              startDate: document.getElementById('newStartDate').value,
+              endDate: document.getElementById('newEndDate').value,
+              targetAudience: 'All'
+            }
           };
-          
-          state.docs.push(newDoc); // บันทึกลง State
-          saveDocs(state.docs);
-          state.showCreateModal = false;
-          render();
+
+          try {
+            const res = await fetch(API_URL, {
+              method: 'POST',
+              headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+              body: JSON.stringify(payload)
+            });
+            const result = await res.json();
+            
+            if (result.status === 'success') {
+              alert("อัปโหลดเอกสารสำเร็จ!");
+              state.showCreateModal = false;
+              // โหลดข้อมูลใหม่จากเซิร์ฟเวอร์เพื่อให้รายการอัปเดต
+              document.getElementById('global-loader').style.display = 'flex';
+              await initApp(); 
+            } else {
+              alert("เกิดข้อผิดพลาดจากเซิร์ฟเวอร์: " + result.message);
+            }
+          } catch (err) {
+            console.error(err);
+            alert("เชื่อมต่อ API ไม่สำเร็จ");
+          } finally {
+            submitBtn.innerText = "เริ่มอัปโหลดเข้าเซิร์ฟเวอร์";
+            submitBtn.disabled = false;
+            submitBtn.classList.replace('bg-slate-400', 'bg-blue-600');
+          }
         };
         
-        // สั่งให้อ่านไฟล์
-        reader.readAsDataURL(file);
+        reader.readAsDataURL(file); // เริ่มแปลงไฟล์
       };
     };
 
-    // ... (ฟังก์ชัน Handler ปิด/เปิด หน้าต่าง อื่นๆ คงเดิม) ...
-    // Initial render
-    render();
+    window.closeCreateDocModal = function() {
+      state.showCreateModal = false;
+      render();
+    };
+
+    // --- API: กดรับทราบเอกสาร ---
+    window.acknowledgeDoc = async function(docId) {
+      const doc = state.docs.find(d => d.id === docId);
+      if (!doc || doc.readStatus.includes(state.user.id)) return;
+
+      // Optimistic UI Update (อัปเดตหน้าจอทันทีก่อนรอ API เพื่อความรวดเร็ว)
+      doc.readStatus.push(state.user.id);
+      render();
+
+      try {
+        const payload = {
+          action: 'acknowledge',
+          docId: docId,
+          userId: state.user.id
+        };
+        
+        const res = await fetch(API_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+          body: JSON.stringify(payload)
+        });
+        const result = await res.json();
+        
+        if (result.status !== 'success') {
+          console.error("API ใช้งานไม่ได้: ", result.message);
+        }
+      } catch (err) {
+        console.error("การเชื่อมต่อมีปัญหา: ", err);
+      }
+    };
+
+    // เริ่มต้นระบบ (ดึงข้อมูลจาก Google Sheets ทันทีที่เปิดหน้าเว็บ)
+    window.onload = initApp;
+
   </script>
 </body>
 </html>
