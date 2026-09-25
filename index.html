@@ -5,35 +5,32 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>DocuAck - Corporate Document Acknowledgement System</title>
   
-  <!-- CSS Framework & Icons -->
+  <!-- External CSS Framework & Icons -->
   <script src="https://cdn.tailwindcss.com"></script>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
   
   <!-- เชื่อมต่อไฟล์ CSS ของเราเอง -->
   <link rel="stylesheet" href="style.css" />
 </head>
-<body class="bg-slate-100 text-slate-800 min-h-screen">
+<body class="bg-slate-100 text-slate-800 min-h-screen relative font-sans">
   
-  <!-- Global Loader -->
-  <div id="global-loader" class="fixed inset-0 z-[100] bg-slate-900 flex flex-col items-center justify-center text-white px-4 text-center">
-    <div id="loader-spinner" class="w-12 h-12 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mb-4"></div>
-    <h2 id="loader-title" class="text-xl font-bold mb-2">กำลังเชื่อมต่อฐานข้อมูล...</h2>
-    <p id="loader-desc" class="text-slate-400 text-sm mb-4">ระบบกำลังดึงข้อมูลบุคลากรและเอกสารจาก Google Sheets</p>
-    <div id="loader-actions" class="hidden flex items-center gap-3">
-      <button onclick="DocuAckApp.reloadPage()" class="px-4 py-2 bg-blue-600 rounded-xl font-bold hover:bg-blue-700 transition cursor-pointer text-sm">
-        <i class="fa-solid fa-rotate-right mr-1.5"></i> ลองใหม่อีกครั้ง
-      </button>
-      <button onclick="DocuAckApp.useOfflineData()" class="px-4 py-2 bg-slate-700 rounded-xl font-bold hover:bg-slate-600 transition cursor-pointer text-sm text-slate-200">
-        <i class="fa-solid fa-hard-drive mr-1.5"></i> เข้าสู่ระบบด้วยข้อมูลออฟไลน์
-      </button>
+  <!-- Wrapper หลัก ป้องกันการชนกันของ Layout หากนำไปใช้ในระบบอื่น -->
+  <div id="docuack-application-wrapper">
+    
+    <!-- Global Loader (แสดงเฉพาะตอนเข้าเว็บครั้งแรกสุดที่ไม่มี Cache) -->
+    <div id="global-loader" class="fixed inset-0 z-[100] bg-slate-900 flex flex-col items-center justify-center text-white px-4 text-center">
+      <div class="w-12 h-12 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mb-4"></div>
+      <h2 class="text-xl font-bold mb-2">กำลังเตรียมระบบ...</h2>
+      <p class="text-slate-400 text-sm">การเข้าใช้งานครั้งแรกอาจใช้เวลาสักครู่</p>
     </div>
+
+    <!-- จุดสำหรับเรนเดอร์ UI หลักและ Modal ด้วย JavaScript -->
+    <div id="docuack-app-root"></div>
+    <div id="docuack-modal-root"></div>
+
   </div>
 
-  <!-- App Mount Point (JS จะนำ UI มาแทรกตรงนี้) -->
-  <div id="app"></div>
-  <div id="modal-container"></div>
-
-  <!-- เชื่อมต่อไฟล์ JavaScript ของเราเอง -->
+  <!-- เชื่อมต่อไฟล์ JavaScript ไว้ท้าย Body เพื่อไม่ให้บล็อกการโหลด HTML (Best Practice) -->
   <script src="app.js"></script>
 </body>
 </html>
