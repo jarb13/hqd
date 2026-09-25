@@ -602,4 +602,3 @@
   // ----------------------------------------------------
   window.addEventListener('DOMContentLoaded', initApp);
 })();
-</script>
