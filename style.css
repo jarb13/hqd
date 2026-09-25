@@ -1,17 +1,40 @@
 /* นำเข้าฟอนต์ภาษาไทย */
 @import url('https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700;800&display=swap');
 
-body {
+/* กำหนดฟอนต์ให้ Wrapper หลัก */
+#docuack-application-wrapper {
   font-family: 'Sarabun', sans-serif;
 }
 
-/* Semantic Class Naming สำหรับป้ายสถานะความเร่งด่วนตามแบบองค์กร */
-.rama-badge-very-urgent { background-color: #fff1f2; color: #be123c; border: 1px solid #fecdd3; }
-.rama-badge-urgent      { background-color: #fffbeb; color: #b45309; border: 1px solid #fde68a; }
-.rama-badge-normal      { background-color: #eff6ff; color: #1d4ed8; border: 1px solid #bfdbfe; }
+/* Semantic Class Naming: ใช้ Class ที่สื่อความหมายชัดเจนตามหลัก Clean Code */
+.rama-badge-very-urgent { 
+  background-color: #fff1f2; 
+  color: #be123c; 
+  border: 1px solid #fecdd3; 
+}
+.rama-badge-urgent { 
+  background-color: #fffbeb; 
+  color: #b45309; 
+  border: 1px solid #fde68a; 
+}
+.rama-badge-normal { 
+  background-color: #eff6ff; 
+  color: #1d4ed8; 
+  border: 1px solid #bfdbfe; 
+}
 
-/* Scrollbar แบบ Custom เพื่อความสวยงาม */
-::-webkit-scrollbar { width: 6px; height: 6px; }
-::-webkit-scrollbar-track { background: #f1f5f9; }
-::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 9999px; }
-::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+/* Custom Scrollbar ให้ดูสะอาดตาและเข้ากับธีม */
+#docuack-application-wrapper ::-webkit-scrollbar { 
+  width: 6px; 
+  height: 6px; 
+}
+#docuack-application-wrapper ::-webkit-scrollbar-track { 
+  background: #f1f5f9; 
+}
+#docuack-application-wrapper ::-webkit-scrollbar-thumb { 
+  background: #cbd5e1; 
+  border-radius: 9999px; 
+}
+#docuack-application-wrapper ::-webkit-scrollbar-thumb:hover { 
+  background: #94a3b8; 
+}
